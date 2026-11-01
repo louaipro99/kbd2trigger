@@ -15,26 +15,37 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install build dependencies
+      - name: Install dependencies
         run: |
           sudo apt-get update -y
-          sudo apt-get install -y make
+          sudo apt-get install -y make git python3
 
-      - name: Download PS3 toolchain (nightly, includes PSL1GHT headers)
+      - name: Download PS3 toolchain (compiler)
         run: |
           curl -sL https://github.com/ps3dev/ps3toolchain/releases/download/nightly-2026-10-11/ps3dev-linux-X64.tar.gz | tar xz -C ${HOME}
           echo "PS3DEV=${HOME}/ps3dev" >> $GITHUB_ENV
-          echo "PSL1GHT=${HOME}/ps3dev" >> $GITHUB_ENV
           echo "${HOME}/ps3dev/bin" >> $GITHUB_PATH
           echo "${HOME}/ps3dev/ppu/bin" >> $GITHUB_PATH
 
-      - name: Show toolchain layout (debug)
+      - name: Clone PSL1GHT (headers + libs)
         run: |
-          ls ${HOME}/ps3dev/
-          ls ${HOME}/ps3dev/ppu/include/ | head -20 || true
+          git clone --depth=1 https://github.com/ps3dev/PSL1GHT.git ${HOME}/PSL1GHT-src
+          echo "PSL1GHT=${HOME}/ps3dev" >> $GITHUB_ENV
+
+      - name: Build PSL1GHT libraries
+        run: |
+          export PS3DEV=${HOME}/ps3dev
+          export PSL1GHT=${HOME}/ps3dev
+          export PATH=${HOME}/ps3dev/bin:${HOME}/ps3dev/ppu/bin:$PATH
+          cd ${HOME}/PSL1GHT-src
+          make install
 
       - name: Build SPRX
-        run: make
+        run: |
+          export PS3DEV=${HOME}/ps3dev
+          export PSL1GHT=${HOME}/ps3dev
+          export PATH=${HOME}/ps3dev/bin:${HOME}/ps3dev/ppu/bin:$PATH
+          make
 
       - name: Upload SPRX artifact
         uses: actions/upload-artifact@v4
