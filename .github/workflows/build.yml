@@ -1,0 +1,28 @@
+name: Build kbd2trigger SPRX
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: ps3dev/ps3dev:latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build SPRX
+        run: make
+
+      - name: Upload SPRX artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: kbd2trigger-sprx
+          path: kbd2trigger.sprx
+          if-no-files-found: error
