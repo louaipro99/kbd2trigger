@@ -30,13 +30,11 @@ jobs:
       - name: Clone PSL1GHT and install headers + linker script
         run: |
           git clone --depth=1 https://github.com/ps3dev/PSL1GHT.git /tmp/PSL1GHT
-          # Copy all headers
           cp -r /tmp/PSL1GHT/ppu/include/. ${HOME}/ps3dev/ppu/include/
-          # Copy linker script to the lib search path
           mkdir -p ${HOME}/ps3dev/ppu/lib
           cp /tmp/PSL1GHT/ppu/crt/lv2.ld ${HOME}/ps3dev/ppu/lib/lv2.ld
-          echo "Linker script installed:"
-          ls ${HOME}/ps3dev/ppu/lib/lv2.ld
+          echo "Available libs:"
+          ls ${HOME}/ps3dev/ppu/lib/ || true
 
       - name: Build SPRX
         run: |
