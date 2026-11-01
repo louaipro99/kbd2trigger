@@ -5,8 +5,6 @@
 #include <io/kb.h>
 #include <io/pad.h>
 
-SYS_PRX_RESIDENT;
-
 #define TRIGGER_MAX 255
 
 static volatile int running = 0;
