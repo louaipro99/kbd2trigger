@@ -5,6 +5,44 @@
 #include <io/kb.h>
 #include <io/pad.h>
 
+/* Embed .sys_proc_prx_param directly — required by sprxlinker */
+extern u32 __libentstart, __libentend;
+extern u32 __libstubstart, __libstubend;
+
+__attribute__((section(".lib.ent.top")))   static u8 _ent_top[0]  = {};
+__attribute__((section(".lib.ent.btm")))   static u8 _ent_btm[0]  = {};
+__attribute__((section(".lib.stub.top")))  static u8 _stub_top[0] = {};
+__attribute__((section(".lib.stub.btm")))  static u8 _stub_btm[0] = {};
+
+typedef struct {
+    u32 size;
+    u32 magic;
+    u32 version;
+    u32 unk0;
+    u32 libent_start;
+    u32 libent_end;
+    u32 libstub_start;
+    u32 libstub_end;
+    u16 ver_major;
+    u16 ver_minor;
+    u32 unk1;
+} SysPrxParam;
+
+__attribute__((section(".sys_proc_prx_param")))
+static const SysPrxParam prx_param = {
+    0x28,
+    0x1b434cec,
+    2,
+    0,
+    (u32)(u64)&__libentstart,
+    (u32)(u64)&__libentend,
+    (u32)(u64)&__libstubstart,
+    (u32)(u64)&__libstubend,
+    0x0101,
+    0,
+    0
+};
+
 #define TRIGGER_MAX 255
 
 static volatile int running = 0;
