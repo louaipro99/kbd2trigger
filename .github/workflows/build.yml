@@ -16,29 +16,30 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install dependencies
-        run: |
-          sudo apt-get update -y
-          sudo apt-get install -y make git python3
+        run: sudo apt-get update -y && sudo apt-get install -y make git
 
-      - name: Download PS3 toolchain (compiler)
+      - name: Download PS3 toolchain
         run: |
-          curl -sL https://github.com/ps3dev/ps3toolchain/releases/download/nightly-2026-10-11/ps3dev-linux-X64.tar.gz | tar xz -C ${HOME}
+          curl -sL https://github.com/ps3dev/ps3toolchain/releases/download/nightly-2026-10-11/ps3dev-linux-X64.tar.gz \
+            | tar xz -C ${HOME}
           echo "PS3DEV=${HOME}/ps3dev" >> $GITHUB_ENV
+          echo "PSL1GHT=${HOME}/ps3dev" >> $GITHUB_ENV
           echo "${HOME}/ps3dev/bin" >> $GITHUB_PATH
           echo "${HOME}/ps3dev/ppu/bin" >> $GITHUB_PATH
 
-      - name: Clone PSL1GHT (headers + libs)
+      - name: Clone PSL1GHT and copy headers
         run: |
-          git clone --depth=1 https://github.com/ps3dev/PSL1GHT.git ${HOME}/PSL1GHT-src
-          echo "PSL1GHT=${HOME}/ps3dev" >> $GITHUB_ENV
-
-      - name: Build PSL1GHT libraries
-        run: |
-          export PS3DEV=${HOME}/ps3dev
-          export PSL1GHT=${HOME}/ps3dev
-          export PATH=${HOME}/ps3dev/bin:${HOME}/ps3dev/ppu/bin:$PATH
-          cd ${HOME}/PSL1GHT-src
-          make install
+          git clone --depth=1 https://github.com/ps3dev/PSL1GHT.git /tmp/PSL1GHT
+          # Copy psl1ght root header
+          cp /tmp/PSL1GHT/ppu/psl1ght.h ${HOME}/ps3dev/ppu/include/psl1ght.h
+          # Copy all ppu include subdirs (io, sys, lv2, pad, etc.)
+          cp -r /tmp/PSL1GHT/ppu/include/. ${HOME}/ps3dev/ppu/include/
+          # Copy ppu_rules and base_rules so sprxlinker tools work
+          cp /tmp/PSL1GHT/ppu_rules ${HOME}/ps3dev/ppu_rules
+          cp /tmp/PSL1GHT/base_rules ${HOME}/ps3dev/base_rules
+          cp /tmp/PSL1GHT/data_rules ${HOME}/ps3dev/data_rules
+          echo "Headers installed:"
+          ls ${HOME}/ps3dev/ppu/include/ | head -20
 
       - name: Build SPRX
         run: |
