@@ -8,11 +8,13 @@ TARGET   := kbd2trigger
 SRCS     := source/main.c
 OBJS     := $(SRCS:.c=.o)
 
+# PRX startup object — provides .sys_proc_prx_param section required by sprxlinker
+SPRX_CRT := $(PS3DEV)/ppu/ppu/lib/lv2-sprx.o
+
 CFLAGS   := -O2 -Wall \
              -mhard-float -ffunction-sections -fdata-sections \
              -I$(PSL1GHT)/ppu/include
 
-# lv2.ld installs to ppu/ppu/lib (PSL1GHT crt Makefile uses $(PS3DEV)/ppu/ppu/lib)
 LDFLAGS  := -L$(PSL1GHT)/ppu/lib \
              -nostartfiles \
              -T$(PS3DEV)/ppu/ppu/lib/lv2.ld \
@@ -27,7 +29,7 @@ $(TARGET).sprx: $(TARGET).elf
 	$(SPRXLINK) $< $@
 
 $(TARGET).elf: $(OBJS)
-	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $(OBJS) $(LIBS)
+	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $(SPRX_CRT) $(OBJS) $(LIBS)
 
 source/main.o: source/main.c
 	$(CC) $(CFLAGS) -c -o $@ $<
