@@ -33,8 +33,19 @@ jobs:
           cp -r /tmp/PSL1GHT/ppu/include/. ${HOME}/ps3dev/ppu/include/
           mkdir -p ${HOME}/ps3dev/ppu/lib
           cp /tmp/PSL1GHT/ppu/crt/lv2.ld ${HOME}/ps3dev/ppu/lib/lv2.ld
-          echo "Available libs:"
+
+      - name: Show GCC specs and available libs (debug)
+        run: |
+          export PS3DEV=${HOME}/ps3dev
+          export PATH=${HOME}/ps3dev/bin:${HOME}/ps3dev/ppu/bin:$PATH
+          echo "=== GCC specs ==="
+          ppu-gcc -dumpspecs | grep -A5 "lib\|lrt\|llv2" || true
+          echo "=== libs in ppu/lib ==="
           ls ${HOME}/ps3dev/ppu/lib/ || true
+          echo "=== libs in ppu/powerpc64-ps3-elf/lib ==="
+          ls ${HOME}/ps3dev/ppu/powerpc64-ps3-elf/lib/ 2>/dev/null | head -30 || true
+          echo "=== gcc internal lib dir ==="
+          find ${HOME}/ps3dev -name "*.a" 2>/dev/null | head -20 || true
 
       - name: Build SPRX
         run: |
