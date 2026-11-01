@@ -12,12 +12,13 @@ CFLAGS   := -O2 -Wall \
              -mhard-float -ffunction-sections -fdata-sections \
              -I$(PSL1GHT)/ppu/include
 
-# SPRX plugins import at runtime — no static libs needed
 LDFLAGS  := -L$(PSL1GHT)/ppu/lib \
              -nostartfiles \
              -T$(PSL1GHT)/ppu/lib/lv2.ld \
              -Wl,--gc-sections \
              -Wl,-shared
+
+LIBS     := -lio -llv2
 
 all: $(TARGET).sprx
 
@@ -25,7 +26,7 @@ $(TARGET).sprx: $(TARGET).elf
 	$(SPRXLINK) $< $@
 
 $(TARGET).elf: $(OBJS)
-	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $(OBJS)
+	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $(OBJS) $(LIBS)
 
 source/main.o: source/main.c
 	$(CC) $(CFLAGS) -c -o $@ $<
