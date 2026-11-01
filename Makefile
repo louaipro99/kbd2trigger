@@ -1,22 +1,36 @@
-TARGET		:= kbd2trigger
-OBJS		:= source/main.o
+PS3DEV   ?= /usr/local/ps3dev
+PSL1GHT  ?= $(PS3DEV)
 
-TITLE		:= kbd2trigger
-APPID		:= KBD00001
-CONTENTID	:= UP0001-KBD00001_00-0000000000000000
+CC       := $(PS3DEV)/ppu/bin/ppu-gcc
+LD       := $(PS3DEV)/ppu/bin/ppu-ld
+SPRXLD   := $(PS3DEV)/bin/fself.py
+ODIR     := build
 
-include $(PSL1GHT)/ppu_rules
+CFLAGS   := -O2 -Wall \
+             -I$(PSL1GHT)/ppu/include \
+             -I$(PSL1GHT)/ppu/include/psl1ght \
+             -mabi=altivec \
+             -maltivec \
+             --sysroot=$(PS3DEV)/ppu
 
-LIBS		:= -lpad -lkb -lsysutil -llv2
+LDFLAGS  := -L$(PSL1GHT)/ppu/lib \
+             -lpad -lio -llv2 \
+             -Wl,-Map,$(TARGET).map
+
+TARGET   := kbd2trigger
+SRCS     := source/main.c
+OBJS     := $(SRCS:.c=.o)
+
+all: $(TARGET).sprx
 
 $(TARGET).sprx: $(TARGET).elf
-	$(SPRXLINKER) $< $@
+	$(PS3DEV)/bin/sprxlinker $< $@
 
 $(TARGET).elf: $(OBJS)
-	$(CXX) $(LDFLAGS) -o $@ $(OBJS) $(LIBS)
+	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $(OBJS)
 
 %.o: %.c
 	$(CC) $(CFLAGS) -c -o $@ $<
 
 clean:
-	rm -f $(OBJS) $(TARGET).elf $(TARGET).sprx
+	rm -f $(OBJS) $(TARGET).elf $(TARGET).sprx $(TARGET).map
