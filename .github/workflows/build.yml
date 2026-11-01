@@ -16,7 +16,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install dependencies
-        run: sudo apt-get update -y && sudo apt-get install -y make git
+        run: sudo apt-get update -y && sudo apt-get install -y make git python3 python3-pip
 
       - name: Download PS3 toolchain
         run: |
@@ -27,25 +27,17 @@ jobs:
           echo "${HOME}/ps3dev/bin" >> $GITHUB_PATH
           echo "${HOME}/ps3dev/ppu/bin" >> $GITHUB_PATH
 
-      - name: Clone PSL1GHT and install headers + linker script
-        run: |
-          git clone --depth=1 https://github.com/ps3dev/PSL1GHT.git /tmp/PSL1GHT
-          cp -r /tmp/PSL1GHT/ppu/include/. ${HOME}/ps3dev/ppu/include/
-          mkdir -p ${HOME}/ps3dev/ppu/lib
-          cp /tmp/PSL1GHT/ppu/crt/lv2.ld ${HOME}/ps3dev/ppu/lib/lv2.ld
-
-      - name: Show GCC specs and available libs (debug)
+      - name: Build and install PSL1GHT (full)
         run: |
           export PS3DEV=${HOME}/ps3dev
+          export PSL1GHT=${HOME}/ps3dev
           export PATH=${HOME}/ps3dev/bin:${HOME}/ps3dev/ppu/bin:$PATH
-          echo "=== GCC specs ==="
-          ppu-gcc -dumpspecs | grep -A5 "lib\|lrt\|llv2" || true
-          echo "=== libs in ppu/lib ==="
-          ls ${HOME}/ps3dev/ppu/lib/ || true
-          echo "=== libs in ppu/powerpc64-ps3-elf/lib ==="
-          ls ${HOME}/ps3dev/ppu/powerpc64-ps3-elf/lib/ 2>/dev/null | head -30 || true
-          echo "=== gcc internal lib dir ==="
-          find ${HOME}/ps3dev -name "*.a" 2>/dev/null | head -20 || true
+          git clone --depth=1 https://github.com/ps3dev/PSL1GHT.git /tmp/PSL1GHT
+          cd /tmp/PSL1GHT
+          # Install control files (ppu_rules, base_rules etc.) first
+          make install-ctrl
+          # Now build and install everything (crt, sprx libs, librt)
+          make && make install
 
       - name: Build SPRX
         run: |
