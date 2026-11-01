@@ -1,36 +1,37 @@
-PS3DEV   ?= /usr/local/ps3dev
-PSL1GHT  ?= $(PS3DEV)
+PS3DEV   ?= $(HOME)/ps3dev
+PSL1GHT  ?= $(HOME)/ps3dev
 
-CC       := $(PS3DEV)/ppu/bin/ppu-gcc
-LD       := $(PS3DEV)/ppu/bin/ppu-ld
-SPRXLD   := $(PS3DEV)/bin/fself.py
-ODIR     := build
-
-CFLAGS   := -O2 -Wall \
-             -I$(PSL1GHT)/ppu/include \
-             -I$(PSL1GHT)/ppu/include/psl1ght \
-             -mabi=altivec \
-             -maltivec \
-             --sysroot=$(PS3DEV)/ppu
-
-LDFLAGS  := -L$(PSL1GHT)/ppu/lib \
-             -lpad -lio -llv2 \
-             -Wl,-Map,$(TARGET).map
+PREFIX   := ppu-
+CC       := $(PS3DEV)/ppu/bin/$(PREFIX)gcc
+SPRXLINK := sprxlinker
 
 TARGET   := kbd2trigger
 SRCS     := source/main.c
 OBJS     := $(SRCS:.c=.o)
 
+MACHDEP  := -mhard-float -fmodulo-sched -ffunction-sections -fdata-sections
+
+CFLAGS   := -O2 -Wall $(MACHDEP) \
+             -I$(PSL1GHT)/ppu/include \
+             -I$(PSL1GHT)/ppu/include/psl1ght
+
+LDFLAGS  := -L$(PSL1GHT)/ppu/lib \
+             -nostartfiles \
+             -Wl,-Map,$(TARGET).map \
+             -Wl,--gc-sections
+
+LIBS     := -llv2
+
 all: $(TARGET).sprx
 
 $(TARGET).sprx: $(TARGET).elf
-	$(PS3DEV)/bin/sprxlinker $< $@
+	$(SPRXLINK) $< $@
 
 $(TARGET).elf: $(OBJS)
-	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $(OBJS)
+	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $(OBJS) $(LIBS)
 
-%.o: %.c
+source/main.o: source/main.c
 	$(CC) $(CFLAGS) -c -o $@ $<
 
 clean:
-	rm -f $(OBJS) $(TARGET).elf $(TARGET).sprx $(TARGET).map
+	rm -f source/main.o $(TARGET).elf $(TARGET).sprx $(TARGET).map
