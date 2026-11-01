@@ -14,6 +14,7 @@ CFLAGS   := -O2 -Wall \
 
 LDFLAGS  := -L$(PSL1GHT)/ppu/lib \
              -nostartfiles \
+             -T$(PSL1GHT)/ppu/lib/lv2.ld \
              -Wl,--gc-sections
 
 LIBS     := -lio -llv2
