@@ -5,29 +5,22 @@
 #include <io/kb.h>
 #include <io/pad.h>
 
-SYS_MODULE_INFO(kbd2trigger, 0, 1, 0);
-SYS_MODULE_START(module_start);
-SYS_MODULE_STOP(module_stop);
+SYS_PRX_RESIDENT;
 
 #define TRIGGER_MAX 255
 
 static volatile int running = 0;
 static sys_ppu_thread_t tid;
 
-/* Pad data we inject into — we hook by wrapping padRead */
 static u8 inject_l2 = 0;
 static u8 inject_l1 = 0;
 static u8 inject_r1 = 0;
 static u8 inject_r2 = 0;
 
-/* Original padRead function pointer (resolved via import) */
-typedef s32 (*padRead_fn)(u32 port, padData *data);
-extern s32 ioPadRead(u32 port, padData *data);
-
 static void kbd_thread(void *arg)
 {
-    KbInfo  kbInfo;
-    KbData  kbData;
+    KbInfo kbInfo;
+    KbData kbData;
 
     ioKbInit(1);
     ioKbSetReadMode(0, KB_RMODE_PACKET);
@@ -47,36 +40,24 @@ static void kbd_thread(void *arg)
                 }
             }
         }
-        sys_timer_usleep(8333); /* ~120 Hz */
+        sysUsleep(8333);
     }
 
     ioKbEnd();
-    sys_ppu_thread_exit(0);
-}
-
-/* Hook: called instead of ioPadRead by patching the import table OPD */
-s32 hooked_ioPadRead(u32 port, padData *data)
-{
-    s32 ret = ioPadRead(port, data);
-    if (ret == 0 && data && data->len > 0) {
-        if (inject_l2) { data->button[CELL_PAD_BTN_OFFSET_DIGITAL2] |= PAD_CTRL_L2;  data->button[CELL_PAD_BTN_OFFSET_ANALOG_LEFT_TRIGGER]  = TRIGGER_MAX; }
-        if (inject_l1) { data->button[CELL_PAD_BTN_OFFSET_DIGITAL2] |= PAD_CTRL_L1; }
-        if (inject_r1) { data->button[CELL_PAD_BTN_OFFSET_DIGITAL2] |= PAD_CTRL_R1; }
-        if (inject_r2) { data->button[CELL_PAD_BTN_OFFSET_DIGITAL2] |= PAD_CTRL_R2;  data->button[CELL_PAD_BTN_OFFSET_ANALOG_RIGHT_TRIGGER] = TRIGGER_MAX; }
-    }
-    return ret;
+    sysThreadExit(0);
 }
 
 s32 module_start(size_t args, const void *argp)
 {
     running = 1;
-    sys_ppu_thread_create(&tid, kbd_thread, 0, 1001, 0x4000, SYS_PPU_THREAD_CREATE_JOINABLE, "kbd2trigger");
+    sysThreadCreate(&tid, kbd_thread, NULL, 1001, 0x4000, THREAD_JOINABLE, "kbd2trigger");
     return SYS_PRX_RESIDENT;
 }
 
 s32 module_stop(void)
 {
+    u64 retval;
     running = 0;
-    sys_ppu_thread_join(tid, NULL);
-    return 0;
+    sysThreadJoin(tid, &retval);
+    return SYS_PRX_STOP_SUCCESS;
 }
