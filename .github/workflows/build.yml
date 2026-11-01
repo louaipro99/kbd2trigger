@@ -16,7 +16,9 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install dependencies
-        run: sudo apt-get update -y && sudo apt-get install -y make git python3 python3-pip
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y make git libelf-dev libssl-dev pkg-config
 
       - name: Download PS3 toolchain
         run: |
@@ -34,9 +36,7 @@ jobs:
           export PATH=${HOME}/ps3dev/bin:${HOME}/ps3dev/ppu/bin:$PATH
           git clone --depth=1 https://github.com/ps3dev/PSL1GHT.git /tmp/PSL1GHT
           cd /tmp/PSL1GHT
-          # Install control files (ppu_rules, base_rules etc.) first
           make install-ctrl
-          # Now build and install everything (crt, sprx libs, librt)
           make && make install
 
       - name: Build SPRX
