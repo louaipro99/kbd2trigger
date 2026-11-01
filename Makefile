@@ -12,9 +12,10 @@ CFLAGS   := -O2 -Wall \
              -mhard-float -ffunction-sections -fdata-sections \
              -I$(PSL1GHT)/ppu/include
 
+# lv2.ld installs to ppu/ppu/lib (PSL1GHT crt Makefile uses $(PS3DEV)/ppu/ppu/lib)
 LDFLAGS  := -L$(PSL1GHT)/ppu/lib \
              -nostartfiles \
-             -T$(PSL1GHT)/ppu/lib/lv2.ld \
+             -T$(PS3DEV)/ppu/ppu/lib/lv2.ld \
              -Wl,--gc-sections \
              -Wl,-shared
 
