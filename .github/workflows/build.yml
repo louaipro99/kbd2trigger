@@ -45,10 +45,12 @@ jobs:
           export PSL1GHT=${HOME}/ps3dev
           export PATH=${HOME}/ps3dev/bin:${HOME}/ps3dev/ppu/bin:$PATH
           make
+          echo "=== build output ==="
+          find . -name "*.sprx" -o -name "*.elf" 2>/dev/null
 
       - name: Upload SPRX artifact
         uses: actions/upload-artifact@v4
         with:
           name: kbd2trigger-sprx
-          path: kbd2trigger.sprx
+          path: "**/*.sprx"
           if-no-files-found: error
