@@ -27,8 +27,9 @@ __asm__(
     "   .text\n"
 );
 
+/* PSL1GHT uses ioPadGetData, not ioPadRead */
 typedef struct { u32 func; u32 toc; } Opd32;
-typedef s32 (*ioPadRead_t)(u32 port, padData *data);
+typedef s32 (*ioPadGetData_t)(u32 port, padData *data);
 
 static volatile int     running       = 0;
 static sys_ppu_thread_t tid;
@@ -38,17 +39,14 @@ static u8 inject_down  = 0;
 static u8 inject_up    = 0;
 static u8 inject_right = 0;
 
-static s32 hooked_ioPadRead(u32 port, padData *data);
+static s32 hooked_ioPadGetData(u32 port, padData *data);
 static Opd32  hook_opd;
-static Opd32  orig_iopad_opd = {0, 0};
-static Opd32 *iopad_opd_ptr  = NULL;
+static Opd32  orig_opd    = {0, 0};
+static Opd32 *opd_ptr     = NULL;
 
-/* ------------------------------------------------------------------ */
-/* Our hooked ioPadRead - calls original then injects D-pad inputs     */
-/* ------------------------------------------------------------------ */
-static s32 hooked_ioPadRead(u32 port, padData *data)
+static s32 hooked_ioPadGetData(u32 port, padData *data)
 {
-    ioPadRead_t orig = (ioPadRead_t)(u64)&orig_iopad_opd;
+    ioPadGetData_t orig = (ioPadGetData_t)(u64)&orig_opd;
     s32 ret = orig(port, data);
 
     if (ret == 0 && data && data->len > 0) {
@@ -60,20 +58,17 @@ static s32 hooked_ioPadRead(u32 port, padData *data)
     return ret;
 }
 
-/* ------------------------------------------------------------------ */
-/* Patch ioPadRead import OPD to point to our hook                     */
-/* ------------------------------------------------------------------ */
 static void patch_iopad(void)
 {
-    Opd32 *import_opd = (Opd32 *)(u64)ioPadRead;
-    Opd32 *hook       = (Opd32 *)(u64)hooked_ioPadRead;
+    Opd32 *import_opd = (Opd32 *)(u64)ioPadGetData;
+    Opd32 *hook       = (Opd32 *)(u64)hooked_ioPadGetData;
 
     hook_opd.func = hook->func;
     hook_opd.toc  = hook->toc;
 
-    orig_iopad_opd = *import_opd;
-    iopad_opd_ptr  = import_opd;
-    *import_opd    = hook_opd;
+    orig_opd = *import_opd;
+    opd_ptr  = import_opd;
+    *import_opd = hook_opd;
 
     __asm__ volatile("dcbst 0,%0; sync; icbi 0,%0; isync"
                      :: "r"(import_opd) : "memory");
@@ -81,17 +76,14 @@ static void patch_iopad(void)
 
 static void unpatch_iopad(void)
 {
-    if (iopad_opd_ptr) {
-        *iopad_opd_ptr = orig_iopad_opd;
+    if (opd_ptr) {
+        *opd_ptr = orig_opd;
         __asm__ volatile("dcbst 0,%0; sync; icbi 0,%0; isync"
-                         :: "r"(iopad_opd_ptr) : "memory");
-        iopad_opd_ptr = NULL;
+                         :: "r"(opd_ptr) : "memory");
+        opd_ptr = NULL;
     }
 }
 
-/* ------------------------------------------------------------------ */
-/* Keyboard polling thread                                              */
-/* ------------------------------------------------------------------ */
 static void kbd_thread(void *arg)
 {
     KbInfo kbInfo;
@@ -124,9 +116,6 @@ static void kbd_thread(void *arg)
     sysThreadExit(0);
 }
 
-/* ------------------------------------------------------------------ */
-/* Module entry / exit                                                  */
-/* ------------------------------------------------------------------ */
 s32 module_start(size_t args, const void *argp)
 {
     running = 1;
