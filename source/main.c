@@ -4,6 +4,7 @@
 #include <sys/prx.h>
 #include <io/kb.h>
 #include <io/pad.h>
+#include <sysutil/msg.h>
 #include <string.h>
 
 /* PRX parameter section - mirrors lv2-sprx.S */
@@ -28,20 +29,7 @@ __asm__(
     "   .text\n"
 );
 
-/*
- * Strategy: use ioPadLdd (Logical Device Driver) to register a
- * virtual controller. Keyboard inputs are pushed into it via
- * ioPadLddDataInsert every frame. The PS3 presents it as a real
- * pad on port 1, visible to ALL games including homebrew.
- *
- * Key mapping:
- *   A -> D-pad Left
- *   S -> D-pad Down
- *   L -> D-pad Up
- *   ; -> D-pad Right
- */
-
-static volatile int     running = 0;
+static volatile int     running    = 0;
 static sys_ppu_thread_t tid;
 static s32              ldd_handle = -1;
 
@@ -56,15 +44,22 @@ static void kbd_thread(void *arg)
     ioKbSetReadMode(0, KB_RMODE_PACKET);
     ioKbSetCodeType(0, KB_CODETYPE_RAW);
 
-    /* Init pad system and register virtual controller */
+    /* Init pad and register virtual LDD controller */
     ioPadInit(5);
     ldd_handle = ioPadLddRegisterController();
+
+    /* Wait 5 seconds then show notification to confirm plugin is running */
+    sysUsleep(5000000);
+    msgDialogOpen2(MSG_DIALOG_NORMAL | MSG_DIALOG_BTN_TYPE_OK,
+                   "kbd2trigger loaded!\nA=Left  S=Down  L=Up  ;=Right",
+                   NULL, NULL, NULL);
+    sysUsleep(3000000);
+    msgDialogClose(0.0f);
 
     while (running) {
         memset(&pad, 0, sizeof(padData));
         pad.len = 24;
 
-        /* Read keyboard */
         if (ioKbGetInfo(&kbInfo) == 0 && kbInfo.status[0] == 1) {
             if (ioKbRead(0, &kbData) == 0 && kbData.nb_keycode > 0) {
                 for (int i = 0; i < kbData.nb_keycode; i++) {
@@ -81,14 +76,12 @@ static void kbd_thread(void *arg)
             }
         }
 
-        /* Push pad data to virtual controller */
         if (ldd_handle >= 0)
             ioPadLddDataInsert(ldd_handle, &pad);
 
-        sysUsleep(8333); /* ~120Hz */
+        sysUsleep(8333);
     }
 
-    /* Cleanup */
     if (ldd_handle >= 0) {
         ioPadLddUnregisterController(ldd_handle);
         ldd_handle = -1;
