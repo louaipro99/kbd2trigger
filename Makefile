@@ -19,11 +19,10 @@ LDFLAGS  := -L$(PSL1GHT)/ppu/lib \
              -Wl,--undefined=module_start \
              -Wl,--undefined=module_stop
 
-LIBS     := -lio -llv2
+LIBS     := -lio -llv2 -lsysutil
 
 all: $(TARGET).sprx
 
-# sprxlinker modifies the ELF in-place, then we rename to .sprx
 $(TARGET).sprx: $(TARGET).elf
 	cp $< $@
 	$(SPRXLINK) $@
