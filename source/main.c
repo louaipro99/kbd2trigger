@@ -27,15 +27,13 @@ __asm__(
     "   .text\n"
 );
 
-#define TRIGGER_MAX          255
-#define SEARCH_START         0x00010000UL
-#define SEARCH_END           0x30000000UL
-#define CELLPAD_READ_FNID    0x6E63AF67
+#define TRIGGER_MAX        255
+#define SEARCH_START       0x00010000UL
+#define SEARCH_END         0x30000000UL
+#define CELLPAD_READ_FNID  0x6E63AF67
 
-/* PSL1GHT uses padData, not CellPadData */
 typedef s32 (*cellPadRead_t)(u32 port, padData *data);
 
-/* OPD = [function_ptr, TOC] on PPC64 */
 typedef struct { u32 func; u32 toc; } Opd32;
 
 static volatile int     running      = 0;
@@ -48,18 +46,11 @@ static u8 inject_l1 = 0;
 static u8 inject_r1 = 0;
 static u8 inject_r2 = 0;
 
-/* Forward declaration so patch_cellpad_read can reference it */
 static s32 hooked_cellPadRead(u32 port, padData *data);
-
-/* OPD entry for our hook function */
 static Opd32 hook_opd;
 
-/* ------------------------------------------------------------------ */
-/* Scan game memory for cellPadRead import stub and patch its OPD      */
-/* ------------------------------------------------------------------ */
 static int patch_cellpad_read(void)
 {
-    /* Build our hook OPD from hooked_cellPadRead's own OPD */
     Opd32 *self_opd = (Opd32 *)(u64)hooked_cellPadRead;
     hook_opd.func = self_opd->func;
     hook_opd.toc  = self_opd->toc;
@@ -68,7 +59,6 @@ static int patch_cellpad_read(void)
     for (u32 addr = SEARCH_START; addr < SEARCH_END; addr += 4) {
         p = (u32 *)(u64)addr;
         if (*p == CELLPAD_READ_FNID) {
-            /* Import stub layout: FNID at p, OPD ptr at p+1 */
             Opd32 *opd_ptr = (Opd32 *)(u64)(*(p + 1));
             if ((u64)opd_ptr >= SEARCH_START && (u64)opd_ptr < SEARCH_END) {
                 orig_opd     = *opd_ptr;
@@ -93,9 +83,6 @@ static void unpatch_cellpad_read(void)
     }
 }
 
-/* ------------------------------------------------------------------ */
-/* Our hooked cellPadRead - injects keyboard inputs into pad data       */
-/* ------------------------------------------------------------------ */
 static s32 hooked_cellPadRead(u32 port, padData *data)
 {
     cellPadRead_t orig = (cellPadRead_t)(u64)&orig_opd;
@@ -103,24 +90,21 @@ static s32 hooked_cellPadRead(u32 port, padData *data)
 
     if (ret == 0 && data && data->len > 0) {
         if (inject_l2) {
-            data->button[CELL_PAD_BTN_OFFSET_DIGITAL2] |= PAD_CTRL_L2;
-            data->button[CELL_PAD_BTN_OFFSET_ANALOG_LEFT_TRIGGER] = TRIGGER_MAX;
+            data->button[PAD_BUTTON_OFFSET_DIGITAL2]  |= PAD_CTRL_L2;
+            data->button[PAD_BUTTON_OFFSET_PRESS_L2]   = TRIGGER_MAX;
         }
         if (inject_l1)
-            data->button[CELL_PAD_BTN_OFFSET_DIGITAL2] |= PAD_CTRL_L1;
+            data->button[PAD_BUTTON_OFFSET_DIGITAL2]  |= PAD_CTRL_L1;
         if (inject_r1)
-            data->button[CELL_PAD_BTN_OFFSET_DIGITAL2] |= PAD_CTRL_R1;
+            data->button[PAD_BUTTON_OFFSET_DIGITAL2]  |= PAD_CTRL_R1;
         if (inject_r2) {
-            data->button[CELL_PAD_BTN_OFFSET_DIGITAL2] |= PAD_CTRL_R2;
-            data->button[CELL_PAD_BTN_OFFSET_ANALOG_RIGHT_TRIGGER] = TRIGGER_MAX;
+            data->button[PAD_BUTTON_OFFSET_DIGITAL2]  |= PAD_CTRL_R2;
+            data->button[PAD_BUTTON_OFFSET_PRESS_R2]   = TRIGGER_MAX;
         }
     }
     return ret;
 }
 
-/* ------------------------------------------------------------------ */
-/* Keyboard polling thread                                              */
-/* ------------------------------------------------------------------ */
 static void kbd_thread(void *arg)
 {
     KbInfo kbInfo;
@@ -130,7 +114,6 @@ static void kbd_thread(void *arg)
     ioKbSetReadMode(0, KB_RMODE_PACKET);
     ioKbSetCodeType(0, KB_CODETYPE_RAW);
 
-    /* Wait 3s for game to fully load before patching */
     sysUsleep(3000000);
     patch_cellpad_read();
 
@@ -155,9 +138,6 @@ static void kbd_thread(void *arg)
     sysThreadExit(0);
 }
 
-/* ------------------------------------------------------------------ */
-/* Module entry / exit                                                  */
-/* ------------------------------------------------------------------ */
 s32 module_start(size_t args, const void *argp)
 {
     running = 1;
