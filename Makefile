@@ -19,7 +19,7 @@ LDFLAGS  := -L$(PSL1GHT)/ppu/lib \
              -Wl,--undefined=module_start \
              -Wl,--undefined=module_stop
 
-LIBS     := -lio -llv2 -lsysutil
+LIBS     := -lio -llv2
 
 all: $(TARGET).sprx
 
