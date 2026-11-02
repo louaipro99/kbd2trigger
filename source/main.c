@@ -5,44 +5,26 @@
 #include <io/kb.h>
 #include <io/pad.h>
 
-/* PRX parameter section — mirrors lv2-sprx.S exactly */
-__asm__ (
-    "    .align 2
-"
-    "    .section \".lib.ent\",\"a\"
-"
-    "    .align 2
-"
-    "    .section \".lib.stub\",\"a\"
-"
-    "    .align 2
-"
-    "    .section \".sys_proc_prx_param\",\"a\"
-"
-    "    .long 0x28
-"
-    "    .long 0x1b434cec
-"
-    "    .long 2
-"
-    "    .long 0
-"
-    "    .long __libentstart
-"
-    "    .long __libentend
-"
-    "    .long __libstubstart
-"
-    "    .long __libstubend
-"
-    "    .short 0x0101
-"
-    "    .short 0
-"
-    "    .long 0
-"
-    "    .text
-"
+/* PRX parameter section injected via inline asm - mirrors lv2-sprx.S */
+__asm__(
+    "   .align 2\n"
+    "   .section \".lib.ent\",\"a\"\n"
+    "   .align 2\n"
+    "   .section \".lib.stub\",\"a\"\n"
+    "   .align 2\n"
+    "   .section \".sys_proc_prx_param\",\"a\"\n"
+    "   .long 0x28\n"
+    "   .long 0x1b434cec\n"
+    "   .long 2\n"
+    "   .long 0\n"
+    "   .long __libentstart\n"
+    "   .long __libentend\n"
+    "   .long __libstubstart\n"
+    "   .long __libstubend\n"
+    "   .short 0x0101\n"
+    "   .short 0\n"
+    "   .long 0\n"
+    "   .text\n"
 );
 
 #define TRIGGER_MAX 255
