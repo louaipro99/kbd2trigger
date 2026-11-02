@@ -2,7 +2,6 @@
 #include <sys/thread.h>
 #include <sys/systime.h>
 #include <sys/prx.h>
-#include <sys/syscall.h>
 #include <io/kb.h>
 #include <io/pad.h>
 
@@ -28,20 +27,6 @@ __asm__(
     "   .text\n"
 );
 
-/*
- * Key mappings:
- *   A -> D-pad Left
- *   S -> D-pad Down
- *   L -> D-pad Up
- *   ; -> D-pad Right
- *
- * Hook strategy: patch ioPadRead's syscall wrapper in our own
- * import table so ALL callers (homebrew + retail) go through us.
- * ioPadRead is syscall 0x215 on LV2.
- */
-
-#define LV2_IOPAD_READ_SYSCALL  0x215
-
 typedef struct { u32 func; u32 toc; } Opd32;
 typedef s32 (*ioPadRead_t)(u32 port, padData *data);
 
@@ -53,31 +38,18 @@ static u8 inject_down  = 0;
 static u8 inject_up    = 0;
 static u8 inject_right = 0;
 
-/* ------------------------------------------------------------------ */
-/* Raw LV2 syscall wrapper for ioPadRead                               */
-/* We call this to get real pad data, bypassing any hook loops         */
-/* ------------------------------------------------------------------ */
-static s32 raw_ioPadRead(u32 port, padData *data)
-{
-    s32 ret;
-    __asm__ volatile(
-        "li  0, %2\n"
-        "sc\n"
-        "mr  %0, 3\n"
-        : "=r"(ret)
-        : "r"((u64)port), "i"(LV2_IOPAD_READ_SYSCALL),
-          "r"((u64)data)
-        : "0", "3", "4", "memory"
-    );
-    return ret;
-}
+static s32 hooked_ioPadRead(u32 port, padData *data);
+static Opd32  hook_opd;
+static Opd32  orig_iopad_opd = {0, 0};
+static Opd32 *iopad_opd_ptr  = NULL;
 
 /* ------------------------------------------------------------------ */
-/* Our hooked ioPadRead - injects D-pad inputs                         */
+/* Our hooked ioPadRead - calls original then injects D-pad inputs     */
 /* ------------------------------------------------------------------ */
 static s32 hooked_ioPadRead(u32 port, padData *data)
 {
-    s32 ret = raw_ioPadRead(port, data);
+    ioPadRead_t orig = (ioPadRead_t)(u64)&orig_iopad_opd;
+    s32 ret = orig(port, data);
 
     if (ret == 0 && data && data->len > 0) {
         if (inject_left)  data->button[PAD_BUTTON_OFFSET_DIGITAL1] |= PAD_CTRL_LEFT;
@@ -89,16 +61,10 @@ static s32 hooked_ioPadRead(u32 port, padData *data)
 }
 
 /* ------------------------------------------------------------------ */
-/* Patch our own ioPadRead import table OPD to point to our hook       */
-/* This affects all callers in the same process                        */
+/* Patch ioPadRead import OPD to point to our hook                     */
 /* ------------------------------------------------------------------ */
-static Opd32  orig_iopad_opd = {0, 0};
-static Opd32  hook_opd;
-static Opd32 *iopad_opd_ptr  = NULL;
-
 static void patch_iopad(void)
 {
-    /* ioPadRead is imported — its symbol IS a pointer to an OPD */
     Opd32 *import_opd = (Opd32 *)(u64)ioPadRead;
     Opd32 *hook       = (Opd32 *)(u64)hooked_ioPadRead;
 
@@ -135,7 +101,6 @@ static void kbd_thread(void *arg)
     ioKbSetReadMode(0, KB_RMODE_PACKET);
     ioKbSetCodeType(0, KB_CODETYPE_RAW);
 
-    /* Patch ioPadRead import OPD immediately - works for homebrew */
     patch_iopad();
 
     while (running) {
@@ -152,7 +117,7 @@ static void kbd_thread(void *arg)
                 }
             }
         }
-        sysUsleep(8333); /* ~120Hz */
+        sysUsleep(8333);
     }
 
     ioKbEnd();
