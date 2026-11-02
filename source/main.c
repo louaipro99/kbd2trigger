@@ -2,6 +2,7 @@
 #include <sys/thread.h>
 #include <sys/systime.h>
 #include <sys/prx.h>
+#include <sys/syscall.h>
 #include <io/kb.h>
 #include <io/pad.h>
 
@@ -27,98 +28,104 @@ __asm__(
     "   .text\n"
 );
 
-#define TRIGGER_MAX        255
-#define CELLPAD_READ_FNID  0x6E63AF67
+/*
+ * Key mappings:
+ *   A -> D-pad Left
+ *   S -> D-pad Down
+ *   L -> D-pad Up
+ *   ; -> D-pad Right
+ *
+ * Hook strategy: patch ioPadRead's syscall wrapper in our own
+ * import table so ALL callers (homebrew + retail) go through us.
+ * ioPadRead is syscall 0x215 on LV2.
+ */
 
-/* Safe scan range - only valid game memory, avoid kernel/VSH areas */
-#define SCAN_START  0x00010000UL
-#define SCAN_END    0x0FF00000UL
+#define LV2_IOPAD_READ_SYSCALL  0x215
 
-typedef s32 (*cellPadRead_t)(u32 port, padData *data);
 typedef struct { u32 func; u32 toc; } Opd32;
+typedef s32 (*ioPadRead_t)(u32 port, padData *data);
 
-static volatile int     running      = 0;
+static volatile int     running       = 0;
 static sys_ppu_thread_t tid;
-static Opd32            orig_opd     = {0, 0};
-static Opd32           *patched_addr = NULL;
-static volatile int     hooked       = 0;
 
-static u8 inject_l2 = 0;
-static u8 inject_l1 = 0;
-static u8 inject_r1 = 0;
-static u8 inject_r2 = 0;
+static u8 inject_left  = 0;
+static u8 inject_down  = 0;
+static u8 inject_up    = 0;
+static u8 inject_right = 0;
 
-static s32 hooked_cellPadRead(u32 port, padData *data);
-static Opd32 hook_opd;
-
-/* Safe memory probe - check if address is readable without crashing */
-static int mem_probe(u32 addr)
+/* ------------------------------------------------------------------ */
+/* Raw LV2 syscall wrapper for ioPadRead                               */
+/* We call this to get real pad data, bypassing any hook loops         */
+/* ------------------------------------------------------------------ */
+static s32 raw_ioPadRead(u32 port, padData *data)
 {
-    /* Skip known bad ranges */
-    if (addr < SCAN_START || addr >= SCAN_END) return 0;
-    if (addr & 3) return 0; /* must be 4-byte aligned */
-    return 1;
+    s32 ret;
+    __asm__ volatile(
+        "li  0, %2\n"
+        "sc\n"
+        "mr  %0, 3\n"
+        : "=r"(ret)
+        : "r"((u64)port), "i"(LV2_IOPAD_READ_SYSCALL),
+          "r"((u64)data)
+        : "0", "3", "4", "memory"
+    );
+    return ret;
 }
 
-static int patch_cellpad_read(void)
+/* ------------------------------------------------------------------ */
+/* Our hooked ioPadRead - injects D-pad inputs                         */
+/* ------------------------------------------------------------------ */
+static s32 hooked_ioPadRead(u32 port, padData *data)
 {
-    Opd32 *self_opd = (Opd32 *)(u64)hooked_cellPadRead;
-    hook_opd.func = self_opd->func;
-    hook_opd.toc  = self_opd->toc;
-
-    for (u32 addr = SCAN_START; addr < SCAN_END; addr += 4) {
-        if (!mem_probe(addr)) continue;
-        u32 *p = (u32 *)(u64)addr;
-        if (*p == CELLPAD_READ_FNID) {
-            u32 opd_addr = *(p + 1);
-            if (!mem_probe(opd_addr)) continue;
-            Opd32 *opd_ptr = (Opd32 *)(u64)opd_addr;
-            if (!mem_probe(opd_ptr->func)) continue;
-            orig_opd     = *opd_ptr;
-            patched_addr = opd_ptr;
-            *opd_ptr     = hook_opd;
-            __asm__ volatile("dcbst 0,%0; sync; icbi 0,%0; isync"
-                             :: "r"(opd_ptr) : "memory");
-            hooked = 1;
-            return 1;
-        }
-    }
-    return 0;
-}
-
-static void unpatch_cellpad_read(void)
-{
-    if (patched_addr && hooked) {
-        *patched_addr = orig_opd;
-        __asm__ volatile("dcbst 0,%0; sync; icbi 0,%0; isync"
-                         :: "r"(patched_addr) : "memory");
-        patched_addr = NULL;
-        hooked = 0;
-    }
-}
-
-static s32 hooked_cellPadRead(u32 port, padData *data)
-{
-    cellPadRead_t orig = (cellPadRead_t)(u64)&orig_opd;
-    s32 ret = orig(port, data);
+    s32 ret = raw_ioPadRead(port, data);
 
     if (ret == 0 && data && data->len > 0) {
-        if (inject_l2) {
-            data->button[PAD_BUTTON_OFFSET_DIGITAL2] |= PAD_CTRL_L2;
-            data->button[PAD_BUTTON_OFFSET_PRESS_L2]  = TRIGGER_MAX;
-        }
-        if (inject_l1)
-            data->button[PAD_BUTTON_OFFSET_DIGITAL2] |= PAD_CTRL_L1;
-        if (inject_r1)
-            data->button[PAD_BUTTON_OFFSET_DIGITAL2] |= PAD_CTRL_R1;
-        if (inject_r2) {
-            data->button[PAD_BUTTON_OFFSET_DIGITAL2] |= PAD_CTRL_R2;
-            data->button[PAD_BUTTON_OFFSET_PRESS_R2]  = TRIGGER_MAX;
-        }
+        if (inject_left)  data->button[PAD_BUTTON_OFFSET_DIGITAL1] |= PAD_CTRL_LEFT;
+        if (inject_down)  data->button[PAD_BUTTON_OFFSET_DIGITAL1] |= PAD_CTRL_DOWN;
+        if (inject_up)    data->button[PAD_BUTTON_OFFSET_DIGITAL1] |= PAD_CTRL_UP;
+        if (inject_right) data->button[PAD_BUTTON_OFFSET_DIGITAL1] |= PAD_CTRL_RIGHT;
     }
     return ret;
 }
 
+/* ------------------------------------------------------------------ */
+/* Patch our own ioPadRead import table OPD to point to our hook       */
+/* This affects all callers in the same process                        */
+/* ------------------------------------------------------------------ */
+static Opd32  orig_iopad_opd = {0, 0};
+static Opd32  hook_opd;
+static Opd32 *iopad_opd_ptr  = NULL;
+
+static void patch_iopad(void)
+{
+    /* ioPadRead is imported — its symbol IS a pointer to an OPD */
+    Opd32 *import_opd = (Opd32 *)(u64)ioPadRead;
+    Opd32 *hook       = (Opd32 *)(u64)hooked_ioPadRead;
+
+    hook_opd.func = hook->func;
+    hook_opd.toc  = hook->toc;
+
+    orig_iopad_opd = *import_opd;
+    iopad_opd_ptr  = import_opd;
+    *import_opd    = hook_opd;
+
+    __asm__ volatile("dcbst 0,%0; sync; icbi 0,%0; isync"
+                     :: "r"(import_opd) : "memory");
+}
+
+static void unpatch_iopad(void)
+{
+    if (iopad_opd_ptr) {
+        *iopad_opd_ptr = orig_iopad_opd;
+        __asm__ volatile("dcbst 0,%0; sync; icbi 0,%0; isync"
+                         :: "r"(iopad_opd_ptr) : "memory");
+        iopad_opd_ptr = NULL;
+    }
+}
+
+/* ------------------------------------------------------------------ */
+/* Keyboard polling thread                                              */
+/* ------------------------------------------------------------------ */
 static void kbd_thread(void *arg)
 {
     KbInfo kbInfo;
@@ -128,33 +135,33 @@ static void kbd_thread(void *arg)
     ioKbSetReadMode(0, KB_RMODE_PACKET);
     ioKbSetCodeType(0, KB_CODETYPE_RAW);
 
-    /* Wait for game to finish loading, retry hook every second until found */
-    while (running && !hooked) {
-        patch_cellpad_read();
-        sysUsleep(1000000); /* retry every 1s */
-    }
+    /* Patch ioPadRead import OPD immediately - works for homebrew */
+    patch_iopad();
 
     while (running) {
-        inject_l2 = inject_l1 = inject_r1 = inject_r2 = 0;
+        inject_left = inject_down = inject_up = inject_right = 0;
 
         if (ioKbGetInfo(&kbInfo) == 0 && kbInfo.status[0] == 1) {
             if (ioKbRead(0, &kbData) == 0 && kbData.nb_keycode > 0) {
                 for (int i = 0; i < kbData.nb_keycode; i++) {
                     u16 k = kbData.keycode[i];
-                    if (k == KB_RAWKEY_A)         inject_l2 = 1;
-                    if (k == KB_RAWKEY_S)         inject_l1 = 1;
-                    if (k == KB_RAWKEY_L)         inject_r1 = 1;
-                    if (k == KB_RAWKEY_SEMICOLON) inject_r2 = 1;
+                    if (k == KB_RAWKEY_A)         inject_left  = 1;
+                    if (k == KB_RAWKEY_S)         inject_down  = 1;
+                    if (k == KB_RAWKEY_L)         inject_up    = 1;
+                    if (k == KB_RAWKEY_SEMICOLON) inject_right = 1;
                 }
             }
         }
-        sysUsleep(8333);
+        sysUsleep(8333); /* ~120Hz */
     }
 
     ioKbEnd();
     sysThreadExit(0);
 }
 
+/* ------------------------------------------------------------------ */
+/* Module entry / exit                                                  */
+/* ------------------------------------------------------------------ */
 s32 module_start(size_t args, const void *argp)
 {
     running = 1;
@@ -167,7 +174,7 @@ s32 module_stop(void)
 {
     u64 retval;
     running = 0;
-    unpatch_cellpad_read();
+    unpatch_iopad();
     sysThreadJoin(tid, &retval);
     return SYS_PRX_STOP_SUCCESS;
 }
