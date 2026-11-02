@@ -39,24 +39,15 @@ jobs:
           make install-ctrl
           make && make install
 
-      - name: Build ELF
+      - name: Build SPRX
         run: |
           export PS3DEV=${HOME}/ps3dev
           export PSL1GHT=${HOME}/ps3dev
           export PATH=${HOME}/ps3dev/bin:${HOME}/ps3dev/ppu/bin:$PATH
-          make kbd2trigger.elf
-          echo "=== ELF sections ==="
-          ppu-readelf -S kbd2trigger.elf | grep -E "prx_param|lib.ent|lib.stub|Name"
-
-      - name: Run sprxlinker manually with full output
-        run: |
-          export PATH=${HOME}/ps3dev/bin:${HOME}/ps3dev/ppu/bin:$PATH
-          echo "=== sprxlinker path ==="
-          which sprxlinker
-          echo "=== running sprxlinker ==="
-          sprxlinker kbd2trigger.elf kbd2trigger.sprx
-          echo "=== exit code: $? ==="
-          ls -la kbd2trigger.sprx 2>/dev/null || echo "sprx NOT created"
+          make
+          echo "=== sections in sprx ==="
+          ppu-readelf -S kbd2trigger.sprx | grep -E "prx_param|lib.ent|lib.stub" || true
+          ls -la kbd2trigger.sprx
 
       - name: Upload SPRX artifact
         uses: actions/upload-artifact@v4
