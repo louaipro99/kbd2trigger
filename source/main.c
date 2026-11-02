@@ -4,7 +4,6 @@
 #include <sys/prx.h>
 #include <io/kb.h>
 #include <io/pad.h>
-#include <sysutil/msg.h>
 #include <string.h>
 
 /* PRX parameter section - mirrors lv2-sprx.S */
@@ -39,22 +38,23 @@ static void kbd_thread(void *arg)
     KbData kbData;
     padData pad;
 
-    /* Init keyboard */
+    /* Small delay to let game stabilize after injection */
+    sysUsleep(2000000);
+
     ioKbInit(1);
     ioKbSetReadMode(0, KB_RMODE_PACKET);
     ioKbSetCodeType(0, KB_CODETYPE_RAW);
 
-    /* Init pad and register virtual LDD controller */
     ioPadInit(5);
     ldd_handle = ioPadLddRegisterController();
 
-    /* Wait 5 seconds then show notification to confirm plugin is running */
-    sysUsleep(5000000);
-    msgDialogOpen2(MSG_DIALOG_NORMAL | MSG_DIALOG_BTN_TYPE_OK,
-                   "kbd2trigger loaded!\nA=Left  S=Down  L=Up  ;=Right",
-                   NULL, NULL, NULL);
-    sysUsleep(3000000);
-    msgDialogClose(0.0f);
+    /* Flash the pad LED briefly to signal we loaded successfully:
+       insert a button press for 500ms so you see something happen */
+    memset(&pad, 0, sizeof(padData));
+    pad.len = 24;
+    pad.button[PAD_BUTTON_OFFSET_DIGITAL2] |= PAD_CTRL_TRIANGLE;
+    if (ldd_handle >= 0) ioPadLddDataInsert(ldd_handle, &pad);
+    sysUsleep(500000);
 
     while (running) {
         memset(&pad, 0, sizeof(padData));
