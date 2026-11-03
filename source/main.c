@@ -38,23 +38,16 @@ static void kbd_thread(void *arg)
     KbData kbData;
     padData pad;
 
-    /* Small delay to let game stabilize after injection */
-    sysUsleep(2000000);
+    /* Small delay after injection */
+    sysUsleep(1000000);
 
+    /* Init keyboard only - do NOT call ioPadInit, game already did it */
     ioKbInit(1);
     ioKbSetReadMode(0, KB_RMODE_PACKET);
     ioKbSetCodeType(0, KB_CODETYPE_RAW);
 
-    ioPadInit(5);
+    /* Register LDD virtual controller on top of existing pad system */
     ldd_handle = ioPadLddRegisterController();
-
-    /* Flash the pad LED briefly to signal we loaded successfully:
-       insert a button press for 500ms so you see something happen */
-    memset(&pad, 0, sizeof(padData));
-    pad.len = 24;
-    pad.button[PAD_BUTTON_OFFSET_DIGITAL2] |= PAD_CTRL_TRIANGLE;
-    if (ldd_handle >= 0) ioPadLddDataInsert(ldd_handle, &pad);
-    sysUsleep(500000);
 
     while (running) {
         memset(&pad, 0, sizeof(padData));
@@ -86,7 +79,6 @@ static void kbd_thread(void *arg)
         ioPadLddUnregisterController(ldd_handle);
         ldd_handle = -1;
     }
-    ioPadEnd();
     ioKbEnd();
     sysThreadExit(0);
 }
