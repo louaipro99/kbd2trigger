@@ -24,13 +24,13 @@ LIBS     := -lio -llv2
 
 all: $(TARGET).sprx
 
-# 1. Link ELF
-# 2. sprxlinker patches OPD/PRX sections in-place
-# 3. fself wraps it as a fake SELF (required by Cobra/CFW to stay loaded)
+# Correct pipeline:
+# 1. Compile + link to ELF
+# 2. fself wraps ELF as fake SELF -> .sprx
+# 3. sprxlinker patches PRX sections in the SELF in-place
 $(TARGET).sprx: $(TARGET).elf
-	cp $< $@
+	$(FSELF) $< $@
 	$(SPRXLINK) $@
-	$(FSELF) $@ $@
 
 $(TARGET).elf: $(OBJS)
 	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $(OBJS) $(LIBS)
