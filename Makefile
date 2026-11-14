@@ -3,6 +3,7 @@ PSL1GHT  ?= $(HOME)/ps3dev
 
 CC       := $(PS3DEV)/ppu/bin/ppu-gcc
 SPRXLINK := sprxlinker
+FSELF    := fself
 
 TARGET   := kbd2trigger
 SRCS     := source/main.c
@@ -23,9 +24,13 @@ LIBS     := -lio -llv2
 
 all: $(TARGET).sprx
 
+# 1. Link ELF
+# 2. sprxlinker patches OPD/PRX sections in-place
+# 3. fself wraps it as a fake SELF (required by Cobra/CFW to stay loaded)
 $(TARGET).sprx: $(TARGET).elf
 	cp $< $@
 	$(SPRXLINK) $@
+	$(FSELF) $@ $@
 
 $(TARGET).elf: $(OBJS)
 	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $(OBJS) $(LIBS)
