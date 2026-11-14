@@ -24,13 +24,14 @@ LIBS     := -lio -llv2
 
 all: $(TARGET).sprx
 
-# Correct pipeline:
-# 1. Compile + link to ELF
-# 2. fself wraps ELF as fake SELF -> .sprx
-# 3. sprxlinker patches PRX sections in the SELF in-place
+# Pipeline:
+# 1. Link to ELF
+# 2. cp ELF to .prx, sprxlinker patches PRX sections in-place on the .prx
+# 3. fself wraps the patched .prx as a fake SELF -> final .sprx
 $(TARGET).sprx: $(TARGET).elf
-	$(FSELF) $< $@
-	$(SPRXLINK) $@
+	cp $< $(TARGET).prx
+	$(SPRXLINK) $(TARGET).prx
+	$(FSELF) $(TARGET).prx $@
 
 $(TARGET).elf: $(OBJS)
 	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $(OBJS) $(LIBS)
@@ -39,4 +40,4 @@ source/main.o: source/main.c
 	$(CC) $(CFLAGS) -c -o $@ $<
 
 clean:
-	rm -f source/main.o $(TARGET).elf $(TARGET).sprx
+	rm -f source/main.o $(TARGET).elf $(TARGET).prx $(TARGET).sprx
