@@ -10,40 +10,15 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    container:
+      image: ps3dev/ps3dev:latest
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install dependencies
-        run: |
-          sudo apt-get update -y
-          sudo apt-get install -y make git libelf-dev libssl-dev pkg-config
-
-      - name: Download PS3 toolchain
-        run: |
-          curl -sL https://github.com/ps3dev/ps3toolchain/releases/download/nightly-2026-10-11/ps3dev-linux-X64.tar.gz \
-            | tar xz -C ${HOME}
-          echo "PS3DEV=${HOME}/ps3dev" >> $GITHUB_ENV
-          echo "PSL1GHT=${HOME}/ps3dev" >> $GITHUB_ENV
-          echo "${HOME}/ps3dev/bin" >> $GITHUB_PATH
-          echo "${HOME}/ps3dev/ppu/bin" >> $GITHUB_PATH
-
-      - name: Build and install PSL1GHT (full)
-        run: |
-          export PS3DEV=${HOME}/ps3dev
-          export PSL1GHT=${HOME}/ps3dev
-          export PATH=${HOME}/ps3dev/bin:${HOME}/ps3dev/ppu/bin:$PATH
-          git clone --depth=1 https://github.com/ps3dev/PSL1GHT.git /tmp/PSL1GHT
-          cd /tmp/PSL1GHT
-          make install-ctrl
-          make && make install
-
       - name: Build SPRX
         run: |
-          export PS3DEV=${HOME}/ps3dev
-          export PSL1GHT=${HOME}/ps3dev
-          export PATH=${HOME}/ps3dev/bin:${HOME}/ps3dev/ppu/bin:$PATH
           make
           echo "=== sections in sprx ==="
           ppu-readelf -S kbd2trigger.sprx | grep -E "prx_param|lib.ent|lib.stub" || true
