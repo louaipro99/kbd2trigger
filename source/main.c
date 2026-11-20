@@ -25,6 +25,9 @@ SYS_MODULE_STOP(module_stop);
 static sys_ppu_thread_t g_thread;
 static volatile int     g_running = 1;
 
+/* semaphore to block module_start until module_stop is called */
+static sys_sem_t g_sem;
+
 static void kbd_thread(uint64_t arg)
 {
     (void)arg;
@@ -33,12 +36,9 @@ static void kbd_thread(uint64_t arg)
     ioKbInit(1);
     ioKbOpen(0);
 
-    IoKbData   kbdata;
-    IoKbConfig kbcfg;
-    ioPadData  paddata;
+    IoKbData  kbdata;
+    ioPadData paddata;
 
-    /* set raw keycode mode */
-    kbcfg.mapping = 0;
     ioKbSetCodeType(0, KB_CODETYPE_RAW);
 
     while (g_running)
@@ -63,22 +63,35 @@ static void kbd_thread(uint64_t arg)
             }
         }
 
-        sys_timer_usleep(8000);
+        sys_timer_usleep(8000); /* ~125 Hz */
     }
 
     ioKbClose(0);
     ioKbEnd();
     ioPadEnd();
+
+    /* signal module_start to unblock and return */
+    sys_sem_post(g_sem);
+
     sys_ppu_thread_exit(0);
 }
 
 SYS_MODULE_START_FUNC(module_start)
 {
+    sys_sem_attribute_t attr;
+    sys_sem_attribute_initialize(attr);
+    sys_sem_create(&g_sem, &attr, 0, 1);
+
     g_running = 1;
     sys_ppu_thread_create(&g_thread, kbd_thread, 0,
                           1001, 0x4000,
                           SYS_PPU_THREAD_CREATE_JOINABLE,
                           "kbd2trigger");
+
+    /* block here — keeps the PRX resident until module_stop signals us */
+    sys_sem_wait(g_sem);
+    sys_sem_destroy(g_sem);
+
     return SYS_PRX_RESIDENT;
 }
 
