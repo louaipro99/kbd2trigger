@@ -11,7 +11,8 @@ OBJS     := $(SRCS:.c=.o)
 
 CFLAGS   := -O2 -Wall \
              -mhard-float -ffunction-sections -fdata-sections \
-             -I$(PSL1GHT)/ppu/include
+             -I$(PSL1GHT)/ppu/include \
+             -I$(PSL1GHT)/ppu/include/cell
 
 LDFLAGS  := -L$(PSL1GHT)/ppu/lib \
              -nostartfiles \
@@ -20,14 +21,10 @@ LDFLAGS  := -L$(PSL1GHT)/ppu/lib \
              -Wl,--undefined=module_start \
              -Wl,--undefined=module_stop
 
-LIBS     := -lio -llv2
+LIBS     := -lio -llv2 -lpad -lkb
 
 all: $(TARGET).sprx
 
-# Pipeline:
-# 1. Link to ELF
-# 2. cp ELF to .prx, sprxlinker patches PRX sections in-place on the .prx
-# 3. fself wraps the patched .prx as a fake SELF -> final .sprx
 $(TARGET).sprx: $(TARGET).elf
 	cp $< $(TARGET).prx
 	$(SPRXLINK) $(TARGET).prx
