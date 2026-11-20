@@ -1,5 +1,5 @@
-PS3DEV   ?= $(HOME)/ps3dev
-PSL1GHT  ?= $(HOME)/ps3dev
+PS3DEV   ?= /usr/local/ps3dev
+PSL1GHT  ?= /usr/local/ps3dev
 
 CC       := $(PS3DEV)/ppu/bin/ppu-gcc
 SPRXLINK := sprxlinker
@@ -11,8 +11,7 @@ OBJS     := $(SRCS:.c=.o)
 
 CFLAGS   := -O2 -Wall \
              -mhard-float -ffunction-sections -fdata-sections \
-             -I$(PSL1GHT)/ppu/include \
-             -I$(PSL1GHT)/ppu/include/cell
+             -I$(PSL1GHT)/ppu/include
 
 LDFLAGS  := -L$(PSL1GHT)/ppu/lib \
              -nostartfiles \
@@ -21,7 +20,7 @@ LDFLAGS  := -L$(PSL1GHT)/ppu/lib \
              -Wl,--undefined=module_start \
              -Wl,--undefined=module_stop
 
-LIBS     := -lio -llv2 -lpad -lkb
+LIBS     := -lio -llv2
 
 all: $(TARGET).sprx
 
